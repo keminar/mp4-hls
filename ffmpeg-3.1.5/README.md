@@ -1,12 +1,14 @@
 ffmpeg编译参数
 ===
+```
 ./configure --prefix=/usr/local/ffmpeg-3.1.5 --enable-libmp3lame --enable-gpl --enable-libx264
 make
 make install
-
+```
 
 .bashrc 环境变量
 ===
+```
 export PATH=$PATH:/usr/local/go/bin
 export GOROOT=/usr/local/go
 export GOPATH=/root/golang
@@ -16,7 +18,7 @@ export CGO_LDFLAGS="-L$FFMPEG_ROOT/lib/ -lavcodec -lavformat -lavutil -lswscale 
 export CGO_CFLAGS="-I$FFMPEG_ROOT/include"
 export PKG_CONFIG_PATH=$FFMPEG_ROOT/lib/pkgconfig/
 export LD_LIBRARY_PATH=$FFMPEG_ROOT/lib:/usr/local/lib:/usr/lib
-
+```
 
 C 语言使用
 ===
