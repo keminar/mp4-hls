@@ -31,6 +31,17 @@
 #include <libavutil/timestamp.h>
 #include <libavformat/avformat.h>
 
+struct options_t {
+    const char *input_file;
+    long segment_duration;
+    const char *output_prefix;
+    const char *m3u8_file;
+    char *tmp_m3u8_file;
+    const char *url_prefix;
+    long num_segments;
+};
+int write_index_file(const struct options_t, const unsigned int first_segment, const unsigned int last_segment, const int end);
+
 static void log_packet(const AVFormatContext *fmt_ctx, const AVPacket *pkt, const char *tag)
 {
     AVRational *time_base = &fmt_ctx->streams[pkt->stream_index]->time_base;
@@ -48,7 +59,6 @@ int main(int argc, char **argv)
     AVOutputFormat *ofmt = NULL;
     AVFormatContext *ifmt_ctx = NULL, *ofmt_ctx = NULL;
     AVPacket pkt;
-    const char *in_filename, *out_prefix;
     int ret, i;
     int stream_index = 0;
     int *stream_mapping = NULL;
@@ -59,6 +69,14 @@ int main(int argc, char **argv)
     double prev_segment_time = 0;
     double segment_time;
     unsigned int output_index = 1;
+    unsigned int first_segment = 1;
+    unsigned int last_segment = 0;
+    struct options_t options;
+    options.segment_duration = 10;
+    options.num_segments = 0;
+    options.url_prefix = "";
+    int write_index = 1;
+
 
     if (argc < 3) {
         printf("usage: %s input output\n"
@@ -68,10 +86,12 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    in_filename  = argv[1];
-    out_prefix = argv[2];
+    options.input_file  = argv[1];
+    options.output_prefix = argv[2];
+    options.m3u8_file = "/tmp2/xxxx.m3u8";
+    options.tmp_m3u8_file = "/tmp2/yyyy.m3u8";
 
-    out_filename = malloc(sizeof(char) * (strlen(out_prefix) + 15));
+    out_filename = malloc(sizeof(char) * (strlen(options.output_prefix) + 15));
         if (!out_filename) {
             fprintf(stderr, "Could not allocate space for output filenames\n");
             exit(1);
@@ -80,8 +100,8 @@ int main(int argc, char **argv)
     av_register_all();
     av_log_set_level(AV_LOG_ERROR);
 
-    if ((ret = avformat_open_input(&ifmt_ctx, in_filename, 0, 0)) < 0) {
-        fprintf(stderr, "Could not open input file '%s'", in_filename);
+    if ((ret = avformat_open_input(&ifmt_ctx, options.input_file, 0, 0)) < 0) {
+        fprintf(stderr, "Could not open input file '%s'", options.input_file);
         goto end;
     }
 
@@ -90,7 +110,7 @@ int main(int argc, char **argv)
         goto end;
     }
 
-    av_dump_format(ifmt_ctx, 0, in_filename, 0);
+    av_dump_format(ifmt_ctx, 0, options.input_file, 0);
 
 /*    avformat_alloc_output_context2(&ofmt_ctx, NULL, NULL, out_filename);
     if (!ofmt_ctx) {
@@ -150,9 +170,9 @@ int main(int argc, char **argv)
         }
         out_stream->codecpar->codec_tag = 0;
     }
-    av_dump_format(ofmt_ctx, 0, out_prefix, 1);
+    av_dump_format(ofmt_ctx, 0, options.output_prefix, 1);
 
-    snprintf(out_filename, strlen(out_prefix) + 15, "%s-%u.ts", out_prefix, output_index);
+    snprintf(out_filename, strlen(options.output_prefix) + 15, "%s-%u.ts", options.output_prefix, output_index);
 
     if (!(ofmt->flags & AVFMT_NOFILE)) {
         ret = avio_open(&ofmt_ctx->pb, out_filename, AVIO_FLAG_WRITE);
@@ -202,8 +222,11 @@ int main(int argc, char **argv)
                 avio_flush(ofmt_ctx->pb);
                 avio_closep(&ofmt_ctx->pb);
 
+                first_segment++;
+                write_index = !write_index_file(options, first_segment, ++last_segment, 0);
 
-                snprintf(out_filename, strlen(out_prefix) + 15, "%s-%u.ts", out_prefix, output_index);
+
+                snprintf(out_filename, strlen(options.output_prefix) + 15, "%s-%u.ts", options.output_prefix, output_index);
                 ret = avio_open(&ofmt_ctx->pb, out_filename, AVIO_FLAG_WRITE);
                 if (ret < 0) {
                     fprintf(stderr, "Could not open output file '%s'", out_filename);
@@ -236,6 +259,10 @@ int main(int argc, char **argv)
     }
 
     av_write_trailer(ofmt_ctx);
+
+    first_segment++;
+    write_index_file(options, first_segment, ++last_segment, 1);
+
 end:
 
     avformat_close_input(&ifmt_ctx);
@@ -255,7 +282,60 @@ end:
     return 0;
 }
 
-static int get_int_from_double(double val)
-{
-    return (int)((val - (int)val) >= 0.001) ? (int)(val + 1) : (int)val;
+int write_index_file(const struct options_t options, const unsigned int first_segment, const unsigned int last_segment, const int end) {
+    FILE *index_fp;
+    char *write_buf;
+    unsigned int i;
+
+    index_fp = fopen(options.tmp_m3u8_file, "w");
+    if (!index_fp) {
+        fprintf(stderr, "Could not open temporary m3u8 index file (%s), no index file will be created\n", options.tmp_m3u8_file);
+        return -1;
+    }
+
+    write_buf = malloc(sizeof(char) * 1024);
+    if (!write_buf) {
+        fprintf(stderr, "Could not allocate write buffer for index file, index file will be invalid\n");
+        fclose(index_fp);
+        return -1;
+    }
+
+    if (options.num_segments) {
+        snprintf(write_buf, 1024, "#EXTM3U\n#EXT-X-TARGETDURATION:%lu\n#EXT-X-MEDIA-SEQUENCE:%u\n", options.segment_duration, first_segment);
+    }
+    else {
+        snprintf(write_buf, 1024, "#EXTM3U\n#EXT-X-TARGETDURATION:%lu\n", options.segment_duration);
+    }
+    if (fwrite(write_buf, strlen(write_buf), 1, index_fp) != 1) {
+        fprintf(stderr, "Could not write to m3u8 index file, will not continue writing to index file\n");
+        free(write_buf);
+        fclose(index_fp);
+        return -1;
+    }
+
+    for (i = first_segment; i <= last_segment; i++) {
+        snprintf(write_buf, 1024, "#EXTINF:%lu,\n%s%s-%u.ts\n", options.segment_duration, options.url_prefix, options.output_prefix, i);
+        if (fwrite(write_buf, strlen(write_buf), 1, index_fp) != 1) {
+            fprintf(stderr, "Could not write to m3u8 index file, will not continue writing to index file\n");
+            free(write_buf);
+            fclose(index_fp);
+            return -1;
+        }
+    }
+
+    if (end) {
+        snprintf(write_buf, 1024, "#EXT-X-ENDLIST\n");
+        if (fwrite(write_buf, strlen(write_buf), 1, index_fp) != 1) {
+            fprintf(stderr, "Could not write last file and endlist tag to m3u8 index file\n");
+            free(write_buf);
+            fclose(index_fp);
+            return -1;
+        }
+    }
+
+    free(write_buf);
+    fclose(index_fp);
+
+    return rename(options.tmp_m3u8_file, options.m3u8_file);
 }
+
