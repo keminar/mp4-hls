@@ -1,5 +1,6 @@
 package remux
 
+
 //#include <libavutil/timestamp.h>
 //#include <libavformat/avformat.h>
 //#include "libavutil/avstring.h"
@@ -7,7 +8,7 @@ package remux
 //struct options_t {
 //    const char *input_file;
 //    const char *output_prefix;
-//    long segment_max_duration;
+//    double segment_max_duration;
 //    char *m3u8_file;
 //    char *tmp_m3u8_file;
 //    const char *url_prefix;
@@ -28,7 +29,6 @@ package remux
 //    int stream_index = 0;
 //    int *stream_mapping = NULL;
 //    int stream_mapping_size = 0;
-//    AVDictionary *opt = NULL;
 //
 //    char *out_filename;
 //    const char  *basename;
@@ -38,7 +38,7 @@ package remux
 //    double duration = 0;
 //    unsigned int output_index = 1; //分片名从1开始
 //    struct options_t options;
-//    options.segment_max_duration = 10; //每个分片TS的最大的时长
+//    options.segment_max_duration = 0; //分片TS的最大的时长
 //    options.url_prefix = "";
 //    int write_ret = 1;
 //    int video_first = 0;
@@ -150,8 +150,6 @@ package remux
 //            }
 //        }
 //
-//        av_dict_set_int(&opt, "hls_list_size", 0, 0);
-//        //av_dict_set_int(&opt, "hls_time", 1, 0);
 //        ret = avformat_write_header(ofmt_ctx, NULL);
 //
 //        if (ret < 0) {
@@ -198,10 +196,12 @@ package remux
 //            if (video_first == 0) { //第一个片
 //                video_first = 1;
 //            } else {
-//                if (tmp_segment_time - prev_segment_time >= 2) {
-//                    duration = segment_time - prev_segment_time;
+//                if (tmp_segment_time - prev_segment_time >= 2) {// 几秒一个分隔
+//                    duration = segment_time - prev_segment_time;// 保证下一个片从关键帧开始
 //                    //fprintf(stderr, "helo -%f, %f,%f = %f\n", tmp_segment_time, segment_time, prev_segment_time, duration);
-//
+//                    if (duration > options.segment_max_duration) {
+//                        options.segment_max_duration = duration;
+//                    }
 //                    if (options.write_index == 0) { // 全部分片
 //                        av_write_trailer(ofmt_ctx);
 //                        avio_flush(ofmt_ctx->pb);
@@ -270,6 +270,8 @@ package remux
 //
 //        write_ret = write_index_trailer(index_fp);
 //        if (write_ret == 0) {
+//            fseek(index_fp, 0, SEEK_SET);
+//            write_index_header(index_fp, options); //修改TARGETDURATION值
 //            rename(options.tmp_m3u8_file, options.m3u8_file);
 //        }
 //    }
@@ -291,7 +293,6 @@ package remux
 //        }
 //    }
 //    avformat_free_context(ofmt_ctx);
-//    av_dict_free(&opt);
 //    av_freep(&stream_mapping);
 //
 //    if (ret < 0 && ret != AVERROR_EOF) {
@@ -310,7 +311,7 @@ package remux
 //        return -1;
 //    }
 //
-//    snprintf(write_buf, 1024, "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:%lu\n#EXT-X-MEDIA-SEQUENCE:%d\n", options.segment_max_duration, options.sequence);
+//    snprintf(write_buf, 1024, "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:%lu\n#EXT-X-MEDIA-SEQUENCE:%d\n", (long)options.segment_max_duration, options.sequence);
 //    if (fwrite(write_buf, strlen(write_buf), 1, index_fp) != 1) {
 //        fprintf(stderr, "Could not write to m3u8 index file, will not continue writing to index file\n");
 //        free(write_buf);

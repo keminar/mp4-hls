@@ -35,12 +35,13 @@
 struct options_t {
     const char *input_file;
     const char *output_prefix;
-    long segment_frame;
+    double segment_max_duration;
     char *m3u8_file;
     char *tmp_m3u8_file;
     const char *url_prefix;
-    int write_m3u8;
+    unsigned int write_m3u8;
     unsigned int write_index;
+    unsigned int sequence;
 };
 int write_index_header(FILE *index_fp, const struct options_t options);
 int write_index_segment(FILE *index_fp, const struct options_t options, const char* basename, unsigned int output_index, double duration);
@@ -67,7 +68,6 @@ int main(int argc, char **argv)
     int stream_index = 0;
     int *stream_mapping = NULL;
     int stream_mapping_size = 0;
-    AVDictionary *opt = NULL;
 
     char *out_filename;
     const char  *basename;
@@ -75,9 +75,9 @@ int main(int argc, char **argv)
     double segment_time;
     double tmp_segment_time;
     double duration = 0;
-    unsigned int output_index = 1; //分片从1开始
+    unsigned int output_index = 1; //分片名从1开始
     struct options_t options;
-    options.segment_frame = 1; //几个关键帧分隔
+    options.segment_max_duration = 0; //每个分片TS的最大的时长
     options.url_prefix = "";
     int write_ret = 1;
     int video_first = 0;
@@ -93,9 +93,10 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    options.sequence = output_index;
     options.input_file  = argv[1];
     options.output_prefix = argv[2];
-    options.write_m3u8 = (int)strtol(argv[3], NULL, 10);
+    options.write_m3u8 = (unsigned int)strtol(argv[3], NULL, 10);
     options.write_index = (unsigned int)strtol(argv[4], NULL, 10);
     options.m3u8_file = malloc(sizeof(char) * (strlen(options.output_prefix) + strlen(".m3u8") + 1));
     snprintf(options.m3u8_file, strlen(options.output_prefix) + 15, "%s.m3u8", options.output_prefix);
@@ -197,8 +198,6 @@ int main(int argc, char **argv)
             }
         }
 
-        av_dict_set_int(&opt, "hls_list_size", 0, 0);
-        //av_dict_set_int(&opt, "hls_time", 1, 0);
         ret = avformat_write_header(ofmt_ctx, NULL);
 
         if (ret < 0) {
@@ -243,12 +242,14 @@ int main(int argc, char **argv)
         tmp_segment_time = pkt.pts * av_q2d(in_stream->time_base);
         if (in_stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO && (pkt.flags & AV_PKT_FLAG_KEY)) {
             if (video_first == 0) { //第一个片
-                segment_time = tmp_segment_time;
                 video_first = 1;
             } else {
-                if (tmp_segment_time - prev_segment_time >= options.segment_frame) {
-                    duration = segment_time - prev_segment_time;
-                    //fprintf(stderr, "helo - %f,%f = %f\n", segment_time, prev_segment_time, duration);
+                if (tmp_segment_time - prev_segment_time >= 2) { // 几秒一个分隔
+                    duration = segment_time - prev_segment_time; // 保证下一个片从关键帧开始
+                    //fprintf(stderr, "helo -%f, %f,%f = %f\n", tmp_segment_time, segment_time, prev_segment_time, duration);
+                    if (duration > options.segment_max_duration) {
+                        options.segment_max_duration = duration;
+                    }
 
                     if (options.write_index == 0) { // 全部分片
                         av_write_trailer(ofmt_ctx);
@@ -263,7 +264,6 @@ int main(int argc, char **argv)
                     }
 
                     prev_segment_time = segment_time;
-                    segment_time = tmp_segment_time;
                     output_index++;
 
                     if (options.write_index == 0 || options.write_index == output_index) {
@@ -284,9 +284,9 @@ int main(int argc, char **argv)
 
                 }
             }
-        } else {
-            segment_time = tmp_segment_time;
         }
+        segment_time = tmp_segment_time;
+
 
         if (options.write_index == 0 ||options.write_index == output_index) {
             /* copy packet */
@@ -319,6 +319,8 @@ int main(int argc, char **argv)
 
         write_ret = write_index_trailer(index_fp);
         if (write_ret == 0) {
+            fseek(index_fp, 0, SEEK_SET);
+            write_index_header(index_fp, options); //修改TARGETDURATION值
             rename(options.tmp_m3u8_file, options.m3u8_file);
         }
     }
@@ -340,7 +342,6 @@ end:
         }
     }
     avformat_free_context(ofmt_ctx);
-    av_dict_free(&opt);
     av_freep(&stream_mapping);
 
     if (ret < 0 && ret != AVERROR_EOF) {
@@ -359,7 +360,7 @@ int write_index_header(FILE *index_fp, const struct options_t options) {
         return -1;
     }
 
-    snprintf(write_buf, 1024, "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:%lu\n#EXT-X-MEDIA-SEQUENCE:0\n", options.segment_frame * 10);
+    snprintf(write_buf, 1024, "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:%lu\n#EXT-X-MEDIA-SEQUENCE:%d\n", (long)options.segment_max_duration, options.sequence);
     if (fwrite(write_buf, strlen(write_buf), 1, index_fp) != 1) {
         fprintf(stderr, "Could not write to m3u8 index file, will not continue writing to index file\n");
         free(write_buf);
