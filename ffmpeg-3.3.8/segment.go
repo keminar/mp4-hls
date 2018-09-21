@@ -262,6 +262,9 @@ package remux
 //    if (options.write_m3u8 > 0) {
 //
 //        duration = segment_time - prev_segment_time;
+//        if (duration > options.segment_max_duration) {
+//            options.segment_max_duration = duration;
+//        }
 //        //fprintf(stderr, "helo - %f,%f = %f\n", segment_time, prev_segment_time, duration);
 //        write_ret = write_index_segment(index_fp, options, basename, output_index, duration);
 //        if (write_ret < 0) {
