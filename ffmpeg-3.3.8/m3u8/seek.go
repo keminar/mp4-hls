@@ -212,9 +212,9 @@ import (
 
 /**
  * inFile 源文件路径如/tmp/big.mp4
- * outFilePre 要输出的m3u8的前缀，比如要生成 /tmp/ccc.m3u8,则输入/tmp/ccc
- * writeM3U8 是否生成m3u8文件，0 不生成 ，1 生成
- * writeIndex 生成哪些ts文件 ，0 全部，1-x生成具体片
+ * outFilePre 要输出的ts的前缀
+ * segmentPts 生成ts的开始pts
+ * writeIndex 生成哪个ts文件
  */
 func Seek(inFile string, outFilePre string, segmentPts int64, writeIndex int) {
 	in_filename := C.CString(inFile)
