@@ -1,17 +1,10 @@
 package remux
 
-
 //#include <libavutil/timestamp.h>
 //#include <libavformat/avformat.h>
 //#include "libavutil/avstring.h"
 //
-//struct options_t {
-//    const char *input_file;
-//    const char *output_prefix;
-//    const char *url_prefix;
-//};
-//
-//static int seek(const char *in_filename, const char *out_prefix, int64_t segment_pts, unsigned int output_index)
+//static int seek(const char *input_file, const char *output_prefix, int64_t segment_pts, unsigned int output_index)
 //{
 //    AVOutputFormat *ofmt = NULL;
 //    AVFormatContext *ifmt_ctx = NULL, *ofmt_ctx = NULL;
@@ -24,15 +17,11 @@ package remux
 //    char *out_filename;
 //    double prev_segment_time = 0;
 //    double tmp_segment_time;
-//    struct options_t options;
-//    options.url_prefix = "";
 //    int video_first = 0;
 //    int first_segment = 0;
 //
-//    options.input_file  = in_filename;
-//    options.output_prefix = out_prefix;
 //
-//    out_filename = malloc(sizeof(char) * (strlen(options.output_prefix) + 20));
+//    out_filename = malloc(sizeof(char) * (strlen(output_prefix) + 20));
 //    if (!out_filename) {
 //        fprintf(stderr, "Could not allocate space for output filenames\n");
 //        exit(1);
@@ -41,8 +30,8 @@ package remux
 //    av_register_all();
 //    av_log_set_level(AV_LOG_ERROR);
 //
-//    if ((ret = avformat_open_input(&ifmt_ctx, options.input_file, 0, 0)) < 0) {
-//        fprintf(stderr, "Could not open input file '%s'", options.input_file);
+//    if ((ret = avformat_open_input(&ifmt_ctx, input_file, 0, 0)) < 0) {
+//        fprintf(stderr, "Could not open input file '%s'", input_file);
 //        ret = AVERROR(ENOMEM);
 //        goto end;
 //    }
@@ -53,7 +42,16 @@ package remux
 //        goto end;
 //    }
 //
-//    av_dump_format(ifmt_ctx, 0, options.input_file, 0);
+//    av_dump_format(ifmt_ctx, 0, input_file, 0);
+//
+//    if (segment_pts != 0) {
+//        ret = av_seek_frame(ifmt_ctx, 0,  segment_pts, AVSEEK_FLAG_ANY);
+//        if (ret < 0) {
+//            fprintf(stderr, "Error could not seek to position\n");
+//            ret = AVERROR(ENOMEM);
+//            goto end;
+//        }
+//    }
 //
 //    ofmt = av_guess_format("mpegts", NULL, NULL);
 //    if (!ofmt) {
@@ -107,8 +105,7 @@ package remux
 //        out_stream->codecpar->codec_tag = 0;
 //    }
 //
-//    snprintf(out_filename, strlen(options.output_prefix) + 20, "%s-%ld-%u.ts", options.output_prefix, segment_pts, output_index);
-//
+//    snprintf(out_filename, strlen(output_prefix) + 20, "%s-%ld-%u.ts", output_prefix, segment_pts, output_index);
 //    if (!(ofmt->flags & AVFMT_NOFILE)) {
 //        ret = avio_open(&ofmt_ctx->pb, out_filename, AVIO_FLAG_WRITE);
 //        if (ret < 0) {
@@ -119,20 +116,10 @@ package remux
 //    }
 //
 //    ret = avformat_write_header(ofmt_ctx, NULL);
-//
 //    if (ret < 0) {
-//        fprintf(stderr, "Error occurred when opening output file\n");
+//        fprintf(stderr, "Error occurred when write mpegts header to output file\n");
 //        ret = AVERROR(ENOMEM);
 //        goto end;
-//    }
-//
-//    if (segment_pts != 0) {
-//        ret = av_seek_frame(ifmt_ctx, 0,  segment_pts, AVSEEK_FLAG_ANY);
-//        if (ret < 0) {
-//            fprintf(stderr, "Error could not seek to position\n");
-//            ret = AVERROR(ENOMEM);
-//            goto end;
-//        }
 //    }
 //
 //    while (1) {
@@ -164,6 +151,7 @@ package remux
 //            } else {
 //                if (tmp_segment_time - prev_segment_time >= 2) {
 //                    //fprintf(stderr, "helo %d,  %f - %f = %f\n", output_index, segment_time, prev_segment_time, (segment_time - prev_segment_time));
+//                    av_packet_unref(&pkt);
 //                    goto finish;
 //                }
 //            }
@@ -177,6 +165,7 @@ package remux
 //        ret = av_interleaved_write_frame(ofmt_ctx, &pkt);
 //        if (ret < 0) {
 //            fprintf(stderr, "Error muxing packet\n");
+//            av_packet_unref(&pkt);
 //            break;
 //        }
 //        av_packet_unref(&pkt);
@@ -212,9 +201,9 @@ import (
 
 /**
  * inFile 源文件路径如/tmp/big.mp4
- * outFilePre 要输出的ts的前缀
- * segmentPts 生成ts的开始pts
- * writeIndex 生成哪个ts文件
+ * outFilePre 要输出的ts的前缀, 比如 /tmp/ccc
+ * segmentPts 生成ts的开始pts , 比如 0
+ * writeIndex 生成哪个ts文件， 比如 1
  */
 func Seek(inFile string, outFilePre string, segmentPts int64, writeIndex int) {
 	in_filename := C.CString(inFile)

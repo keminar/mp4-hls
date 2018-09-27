@@ -4,7 +4,7 @@ package remux
 //#include <libavformat/avformat.h>
 //#include "libavutil/avstring.h"
 //
-//struct options_t {
+//struct options_m3u8 {
 //    const char *input_file;
 //    const char *ts_path_prefix;
 //    double segment_max_duration;
@@ -13,8 +13,8 @@ package remux
 //    const char *ts_url_prefix;
 //    unsigned int sequence;
 //};
-//int write_index_header(FILE *index_fp, char *write_buf, const struct options_t options);
-//int write_index_segment(FILE *index_fp, char *write_buf, const struct options_t options, unsigned int output_index, double duration, int64_t segment_pts);
+//int write_index_header(FILE *index_fp, char *write_buf, const struct options_m3u8 options);
+//int write_index_segment(FILE *index_fp, char *write_buf, const struct options_m3u8 options, unsigned int output_index, double duration, int64_t segment_pts);
 //int write_index_trailer(FILE *index_fp, char *write_buf);
 //
 //static int m3u8(const char *in_filename,const char *m3u8_file, const char *ts_path_prefix, const char *ts_url_prefix)
@@ -31,7 +31,7 @@ package remux
 //    double tmp_segment_time;
 //    double duration = 0;
 //    unsigned int output_index = 1;
-//    struct options_t options;
+//    struct options_m3u8 options;
 //    options.segment_max_duration = 0;
 //
 //    int write_ret = 1;
@@ -39,6 +39,8 @@ package remux
 //    FILE *index_fp;
 //    int64_t segment_pts = 0;
 //
+//
+//    memset(&options, 0, sizeof(options));
 //    options.sequence = output_index;
 //    options.input_file  = in_filename;
 //    options.m3u8_file = m3u8_file;
@@ -185,7 +187,7 @@ package remux
 //    return 0;
 //}
 //
-//int write_index_header(FILE *index_fp, char *write_buf, const struct options_t options) {
+//int write_index_header(FILE *index_fp, char *write_buf, const struct options_m3u8 options) {
 //    snprintf(write_buf, 1024, "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:%-5lu\n#EXT-X-MEDIA-SEQUENCE:%d\n", (long)options.segment_max_duration, options.sequence);
 //    if (fwrite(write_buf, strlen(write_buf), 1, index_fp) != 1) {
 //        fprintf(stderr, "Could not write to m3u8 index file, will not continue writing to index file\n");
@@ -194,7 +196,7 @@ package remux
 //    return 0;
 //}
 //
-//int write_index_segment(FILE *index_fp, char *write_buf, const struct options_t options, unsigned int output_index, double duration, int64_t segment_pts) {
+//int write_index_segment(FILE *index_fp, char *write_buf, const struct options_m3u8 options, unsigned int output_index, double duration, int64_t segment_pts) {
 //    snprintf(write_buf, 1024, "#EXTINF:%f,\n%s%s-%ld-%u.ts\n", duration, options.ts_url_prefix, options.ts_path_prefix, segment_pts, output_index);
 //    if (fwrite(write_buf, strlen(write_buf), 1, index_fp) != 1) {
 //        fprintf(stderr, "Could not write to m3u8 index file, will not continue writing to index file\n");
@@ -222,17 +224,17 @@ import (
 /**
  * inFile 源文件路径如/tmp/big.mp4
  * outFilePre 要输出的m3u8，比如  /tmp/ccc.m3u8
- * tsPathPre 生成的ts的文件名
- * tsUrl 生成哪些ts文件域名前缀
+ * tsNamePre 生成的ts的文件名，比如 ccc
+ * tsUrl 生成哪些ts文件url前缀,比如 /video/
  */
-func M3u8(inFile string, m3u8File string, tsPathPre string, tsUrl string) {
+func M3u8(inFile string, m3u8File string, tsNamePre string, tsUrl string) {
 	in_filename := C.CString(inFile)
 	defer C.free(unsafe.Pointer(in_filename))
 
 	m3u8_file := C.CString(m3u8File)
 	defer C.free(unsafe.Pointer(m3u8_file))
 
-	ts_path_prefix := C.CString(tsPathPre)
+	ts_path_prefix := C.CString(tsNamePre)
 	defer C.free(unsafe.Pointer(ts_path_prefix))
 
 	ts_url_prefix := C.CString(tsUrl)
