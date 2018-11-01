@@ -75,9 +75,11 @@ int main(int argc, char **argv)
     double segment_time;
     double tmp_segment_time;
     double duration = 0;
-    unsigned int output_index = 1; //分片名从1开始
+    //分片名从1开始
+    unsigned int output_index = 1;
     struct options_t options;
-    options.segment_max_duration = 0; //每个分片TS的最大的时长
+    //每个分片TS的最大的时长
+    options.segment_max_duration = 0;
     options.url_prefix = "";
     int write_ret = 1;
     int video_first = 0;
@@ -234,24 +236,31 @@ int main(int argc, char **argv)
             av_packet_unref(&pkt);
             continue;
         }
-
+        if (in_stream->codecpar->codec_type != AVMEDIA_TYPE_VIDEO ) {
+            av_packet_unref(&pkt);
+            continue;
+        }
         pkt.stream_index = stream_mapping[pkt.stream_index];
         out_stream = ofmt_ctx->streams[pkt.stream_index];
         //log_packet(ifmt_ctx, &pkt, "in");
 
         tmp_segment_time = pkt.pts * av_q2d(in_stream->time_base);
         if (in_stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO && (pkt.flags & AV_PKT_FLAG_KEY)) {
-            if (video_first == 0) { //第一个片
+            //第一个片
+            if (video_first == 0) {
                 video_first = 1;
             } else {
-                if (tmp_segment_time - prev_segment_time >= 2) { // 几秒一个分隔
-                    duration = segment_time - prev_segment_time; // 保证下一个片从关键帧开始
+                // 几秒一个分隔
+                if (tmp_segment_time - prev_segment_time >= 1) {
+                    // 保证下一个片从关键帧开始
+                    duration = segment_time - prev_segment_time;
                     //fprintf(stderr, "helo -%f, %f,%f = %f\n", tmp_segment_time, segment_time, prev_segment_time, duration);
                     if (duration > options.segment_max_duration) {
                         options.segment_max_duration = duration;
                     }
 
-                    if (options.write_index == 0) { // 全部分片
+                    // 全部分片
+                    if (options.write_index == 0) {
                         av_write_trailer(ofmt_ctx);
                         avio_flush(ofmt_ctx->pb);
                         avio_closep(&ofmt_ctx->pb);
@@ -323,7 +332,8 @@ int main(int argc, char **argv)
         write_ret = write_index_trailer(index_fp);
         if (write_ret == 0) {
             fseek(index_fp, 0, SEEK_SET);
-            write_index_header(index_fp, options); //修改TARGETDURATION值
+            //修改TARGETDURATION值
+            write_index_header(index_fp, options);
             rename(options.tmp_m3u8_file, options.m3u8_file);
         }
     }
