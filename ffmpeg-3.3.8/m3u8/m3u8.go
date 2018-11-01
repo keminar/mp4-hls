@@ -1,5 +1,6 @@
 package remux
 
+
 //#include <libavutil/timestamp.h>
 //#include <libavformat/avformat.h>
 //#include "libavutil/avstring.h"
@@ -120,15 +121,19 @@ package remux
 //            av_packet_unref(&pkt);
 //            continue;
 //        }
-//
+//        if (in_stream->codecpar->codec_type != AVMEDIA_TYPE_VIDEO ) {
+//            av_packet_unref(&pkt);
+//            continue;
+//        }
 //        pkt.stream_index = stream_mapping[pkt.stream_index];
-//
 //        tmp_segment_time = pkt.pts * av_q2d(in_stream->time_base);
+//        //printf("%d: pts %d video %d\n", pkt.pts, in_stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO, pkt.flags & AV_PKT_FLAG_KEY);
 //        if (in_stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO && (pkt.flags & AV_PKT_FLAG_KEY)) {
+//            //printf("%d , %d \n", pkt.pts,  in_stream->time_base.den);
 //            if (video_first == 0) {
 //                video_first = 1;
 //            } else {
-//                if (tmp_segment_time - prev_segment_time >= 2) {
+//                if (tmp_segment_time - prev_segment_time >= 1) {
 //                    duration = segment_time - prev_segment_time;
 //                    if (duration > options.segment_max_duration) {
 //                        options.segment_max_duration = duration;
@@ -147,7 +152,6 @@ package remux
 //            }
 //        }
 //        segment_time = tmp_segment_time;
-//
 //        av_packet_unref(&pkt);
 //    }
 //
@@ -173,8 +177,10 @@ package remux
 //    fclose(index_fp);
 //free_buffer:
 //    free(write_buf);
+//    write_buf = NULL;
 //end:
 //    free(options.tmp_m3u8_file);
+//    options.tmp_m3u8_file = NULL;
 //    avformat_close_input(&ifmt_ctx);
 //
 //    av_freep(&stream_mapping);
